@@ -151,7 +151,7 @@ unsigned long pr_parser_set_include_opts(unsigned long opts);
 #define PR_PARSER_INCLUDE_OPT_IGNORE_WILDCARDS		0x0004
 
 /* Internal use only */
-int parse_config_path(pool *p, const char *path);
-int parse_config_path2(pool *p, const char *path, unsigned int depth);
+int parse_config_path(pool *p, const char *path, unsigned int optional);
+int parse_config_path2(pool *p, const char *path, unsigned int depth, unsigned int optional);
 
 #endif /* PR_PARSER_H */

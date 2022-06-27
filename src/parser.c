@@ -955,7 +955,7 @@ static int config_filename_cmp(const void *a, const void *b) {
 }
 
 static int parse_wildcard_config_path(pool *p, const char *path,
-    unsigned int depth) {
+    unsigned int depth, unsigned int optional) {
   register unsigned int i;
   int res, xerrno;
   pool *tmp_pool;
@@ -1132,16 +1132,18 @@ static int parse_wildcard_config_path(pool *p, const char *path,
     const char *globbed_dir;
 
     globbed_dir = ((const char **) globbed_dirs->elts)[i];
-    res = parse_config_path2(p, globbed_dir, depth);
+    res = parse_config_path2(p, globbed_dir, depth, optional);
     if (res < 0) {
       xerrno = errno;
 
       pr_trace_msg(trace_channel, 7, "error parsing wildcard path '%s': %s",
         globbed_dir, strerror(xerrno));
 
-      destroy_pool(tmp_pool);
-      errno = xerrno;
-      return -1;
+      if (!optional) {
+        destroy_pool(tmp_pool);
+        errno = xerrno;
+        return -1;
+      }
     }
   }
 
@@ -1149,7 +1151,7 @@ static int parse_wildcard_config_path(pool *p, const char *path,
   return 0;
 }
 
-int parse_config_path2(pool *p, const char *path, unsigned int depth) {
+int parse_config_path2(pool *p, const char *path, unsigned int depth, unsigned int optional) {
   struct stat st;
   int have_glob;
   void *dirh;
@@ -1245,7 +1247,7 @@ int parse_config_path2(pool *p, const char *path, unsigned int depth) {
       glob_dir = pstrdup(p, dup_path);
       destroy_pool(tmp_pool);
 
-      return parse_wildcard_config_path(p, glob_dir, depth);
+      return parse_wildcard_config_path(p, glob_dir, depth, optional);
     }
 
     ptr++;
@@ -1358,6 +1360,6 @@ int parse_config_path2(pool *p, const char *path, unsigned int depth) {
   return 0;
 }
 
-int parse_config_path(pool *p, const char *path) {
-  return parse_config_path2(p, path, 0);
+int parse_config_path(pool *p, const char *path, unsigned int optional) {
+  return parse_config_path2(p, path, 0, optional);
 }

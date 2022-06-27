@@ -386,13 +386,68 @@ MODRET set_include(cmd_rec *cmd) {
   }
 
   PRIVS_ROOT
-  res = parse_config_path(cmd->tmp_pool, cmd->argv[1]);
+  res = parse_config_path(cmd->tmp_pool, cmd->argv[1], 0);
   xerrno = errno;
   PRIVS_RELINQUISH
 
   if (res < 0) {
     if (xerrno != EINVAL) {
       pr_log_pri(PR_LOG_WARNING, "warning: unable to include '%s': %s",
+        (char *) cmd->argv[1], strerror(xerrno));
+
+    } else {
+      CONF_ERROR(cmd, pstrcat(cmd->tmp_pool, "error including '",
+        (char *) cmd->argv[1], "': ", strerror(xerrno), NULL));
+    }
+  }
+
+  return PR_HANDLED(cmd);
+}
+
+/* usage: IncludeOptional path|pattern */
+MODRET set_includeoptional(cmd_rec *cmd) {
+  int allowed_ctxs, parent_ctx, res, xerrno;
+
+  CHECK_ARGS(cmd, 1);
+
+  /* If we are not currently in a .ftpaccess context, then we allow Include
+   * in a <Limit> section.  Otherwise, a .ftpaccess file could contain a
+   * <Limit>, and that <Limit> could include e.g. itself, leading to a loop.
+   */
+
+  allowed_ctxs = CONF_ROOT|CONF_VIRTUAL|CONF_ANON|CONF_GLOBAL|CONF_DIR;
+
+  parent_ctx = CONF_ROOT;
+  if (cmd->config != NULL &&
+      cmd->config->parent != NULL) {
+    parent_ctx = cmd->config->parent->config_type;
+  }
+
+  if (parent_ctx != CONF_DYNDIR) {
+    allowed_ctxs |= CONF_LIMIT;
+  }
+
+  CHECK_CONF(cmd, allowed_ctxs);
+
+  /* Make sure the given path is a valid path. */
+
+  PRIVS_ROOT
+  res = pr_fs_valid_path(cmd->argv[1]);
+  PRIVS_RELINQUISH
+
+  if (res < 0) {
+    CONF_ERROR(cmd, pstrcat(cmd->tmp_pool,
+      "unable to use path for configuration file '", cmd->argv[1], "'", NULL));
+  }
+
+  PRIVS_ROOT
+  res = parse_config_path(cmd->tmp_pool, cmd->argv[1], 1);
+  xerrno = errno;
+  PRIVS_RELINQUISH
+
+  if (res < 0) {
+    if (xerrno != EINVAL) {
+      pr_log_pri(PR_LOG_WARNING, "warning: no file matched '%s': %s",
         (char *) cmd->argv[1], strerror(xerrno));
 
     } else {
@@ -7259,6 +7314,7 @@ static conftable core_conftab[] = {
   { "HideUser",			set_hideuser,			NULL },
   { "IgnoreHidden",		set_ignorehidden,		NULL },
   { "Include",			set_include,	 		NULL },
+  { "IncludeOptional",		set_includeoptional, 		NULL },
   { "IncludeOptions",		set_includeoptions, 		NULL },
   { "MasqueradeAddress",	set_masqueradeaddress,		NULL },
   { "MaxCommandRate",		set_maxcommandrate,		NULL },
